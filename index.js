@@ -1,0 +1,360 @@
+/**
+ * st-deepseek-router — SillyTavern port of yjh051108/dsh-router-standard:
+ * task-aware reasoning-mode routing for DeepSeek models.
+ *
+ * Hooks CHAT_COMPLETION_PROMPT_READY and rewrites the final prompt array
+ * (prompt-plane only; stored chat messages are never modified):
+ *
+ *  1. standard mode — RL interface restoration: every system message collapses
+ *     into the core RL sentence (upstream "standard" mode).
+ *  2. persona injection (auto / spec / react / weak) — classify the chat's
+ *     first user message, lock the band per chat in chat metadata, then inject
+ *     the persona sentence for the detected model family as a marked system
+ *     message (upstream "spec" mode).
+ *  3. anti-rumination anchors at 8/20/36 messages back from the window end
+ *     (DeepSeek Pro/Flash families only, as measured upstream).
+ *  4. depth-adaptive guidance: fast-convergence (react/weak bands) or
+ *     decision-closure (spec band) as the context window drains.
+ *
+ * Only applies to Chat Completion API sources. Non-DeepSeek models are left
+ * untouched unless "apply to all models" is enabled; unknown DeepSeek ids
+ * (deepseek-chat / deepseek-reasoner / v3.x) route with the core persona.
+ */
+import {
+    extension_settings,
+    getContext,
+    renderExtensionTemplateAsync,
+    saveMetadataDebounced,
+} from '../../../extensions.js';
+import { eventSource, event_types } from '../../../events.js';
+import { saveSettingsDebounced } from '../../../../script.js';
+import { t } from '../../../i18n.js';
+import {
+    appendUserAnchor,
+    buildGuidance,
+    classifyTask,
+    corePersona,
+    modelFamily,
+    personaFor,
+    replaceSystemWithCore,
+} from './router-core.js';
+
+const MODULE_NAME = 'st-deepseek-router';
+const PERSONA_MSG_NAME = 'dsh_router';
+const GUIDE_MSG_NAME = 'dsh_router_guide';
+const METADATA_KEY = 'dsh_router_state';
+const ANCHOR_OFFSETS = [36, 20, 8];
+
+const DEFAULT_SETTINGS = {
+    /** auto | spec | react | weak | standard | off */
+    mode: 'auto',
+    /** Persona system-message position: first message, or after the leading system block. */
+    injectPosition: 'first',
+    anchorsEnabled: true,
+    guidanceEnabled: true,
+    /** Route even when the model id is not DeepSeek-shaped. */
+    applyToAllModels: false,
+    /** Per-band persona overrides; empty string = upstream built-in for the family. */
+    personaOverrides: { spec: '', react: '', weak: '' },
+};
+
+function getSettings() {
+    return extension_settings[MODULE_NAME];
+}
+
+function loadSettings() {
+    extension_settings[MODULE_NAME] = extension_settings[MODULE_NAME] || {};
+    const settings = extension_settings[MODULE_NAME];
+    for (const key of Object.keys(DEFAULT_SETTINGS)) {
+        if (settings[key] === undefined) settings[key] = structuredClone(DEFAULT_SETTINGS[key]);
+    }
+    settings.personaOverrides = { ...DEFAULT_SETTINGS.personaOverrides, ...(settings.personaOverrides || {}) };
+}
+
+// ---------------------------------------------------------------------------
+// Per-chat routing state (chat metadata)
+// ---------------------------------------------------------------------------
+
+function getRoutingState() {
+    const context = getContext();
+    return context.metadata?.[METADATA_KEY] ?? null;
+}
+
+function setRoutingState(state) {
+    const context = getContext();
+    context.metadata = context.metadata || {};
+    if (state) {
+        context.metadata[METADATA_KEY] = state;
+    } else {
+        delete context.metadata[METADATA_KEY];
+    }
+    saveMetadataDebounced();
+}
+
+/**
+ * Classify the chat from its first stored user message (prompt examples and
+ * system blocks are skipped, so roleplay openings route on their own text).
+ * @returns {{ taskKind: 'spec' | 'react' | 'weak', preview: string } | null}
+ */
+function classifyCurrentChat() {
+    const chat = getContext().chat;
+    if (!Array.isArray(chat)) return null;
+    for (const message of chat) {
+        if (message?.is_user && typeof message.mes === 'string' && message.mes.length >= 2) {
+            const taskKind = classifyTask(message.mes);
+            if (taskKind) {
+                return { taskKind, preview: message.mes.slice(0, 80) };
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * Resolve the active band: manual pin wins; auto locks the first
+ * classification into chat metadata (upstream: the router decides once, at
+ * the first request, then stops re-deciding).
+ * @param {string} modeSetting
+ * @returns {'spec' | 'react' | 'weak' | null}
+ */
+function resolveTaskKind(modeSetting) {
+    if (modeSetting === 'spec' || modeSetting === 'react' || modeSetting === 'weak') {
+        return modeSetting;
+    }
+    const locked = getRoutingState();
+    if (locked?.taskKind) {
+        return locked.taskKind;
+    }
+    const classified = classifyCurrentChat();
+    if (!classified) {
+        return null;
+    }
+    setRoutingState({ taskKind: classified.taskKind, source: 'auto', preview: classified.preview });
+    return classified.taskKind;
+}
+
+// ---------------------------------------------------------------------------
+// Prompt-plane rewriting
+// ---------------------------------------------------------------------------
+
+function currentModelId() {
+    const context = getContext();
+    return String(context.onlineStatus || context.chatCompletionSettings?.custom_model_id || '');
+}
+
+function isRoutableModel(modelId, family) {
+    return family !== 'DeepSeekOther' || getSettings().applyToAllModels || /deepseek/i.test(modelId);
+}
+
+function resolvePersona(family, taskKind) {
+    const override = getSettings().personaOverrides[taskKind]?.trim();
+    return override || personaFor(family, taskKind);
+}
+
+function stripRouterMessages(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]?.name === PERSONA_MSG_NAME || messages[i]?.name === GUIDE_MSG_NAME) {
+            messages.splice(i, 1);
+        }
+    }
+}
+
+function injectPersona(messages, persona, position) {
+    let insertAt = 0;
+    if (position === 'after-system') {
+        while (insertAt < messages.length && messages[insertAt]?.role === 'system') {
+            insertAt++;
+        }
+    }
+    messages.splice(insertAt, 0, { role: 'system', name: PERSONA_MSG_NAME, content: persona });
+}
+
+/** Index of the last user message in the final prompt array. */
+function lastUserIndex(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i]?.role === 'user') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function applyAnchors(messages, family) {
+    const lastIdx = lastUserIndex(messages);
+    for (const n of ANCHOR_OFFSETS) {
+        const idx = lastIdx - (messages.length - 1 - n);
+        if (idx >= 0 && idx < messages.length) {
+            appendUserAnchor(messages[idx], n, family);
+        }
+    }
+}
+
+function applyGuidance(messages, taskKind) {
+    const guide = buildGuidance(messages, taskKind, lastUserIndex(messages), messages.length);
+    if (guide) {
+        messages.push({ role: 'system', name: GUIDE_MSG_NAME, content: guide });
+    }
+}
+
+/**
+ * CHAT_COMPLETION_PROMPT_READY handler: rewrites the outgoing message array
+ * in place. Fires both for real sends and for dry runs (token counting), so
+ * token estimates include the router's injections.
+ * @param {{ chat: Array<object>, dryRun: boolean }} eventData
+ */
+function onPromptReady(eventData) {
+    const messages = eventData?.chat;
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return;
+    }
+    const settings = getSettings();
+    if (settings.mode === 'off') {
+        updateStatus();
+        return;
+    }
+    if (getContext().mainAPI !== 'openai') {
+        updateStatus();
+        return;
+    }
+
+    const modelId = currentModelId();
+    const family = modelFamily(modelId);
+    if (!isRoutableModel(modelId, family)) {
+        updateStatus();
+        return;
+    }
+
+    stripRouterMessages(messages);
+
+    if (settings.mode === 'standard') {
+        replaceSystemWithCore(messages, corePersona);
+        updateStatus();
+        return;
+    }
+
+    const taskKind = resolveTaskKind(settings.mode);
+    if (!taskKind) {
+        updateStatus();
+        return;
+    }
+
+    injectPersona(messages, resolvePersona(family, taskKind), settings.injectPosition);
+    if (settings.anchorsEnabled) {
+        applyAnchors(messages, family);
+    }
+    if (settings.guidanceEnabled) {
+        applyGuidance(messages, taskKind);
+    }
+    updateStatus();
+}
+
+// ---------------------------------------------------------------------------
+// Settings panel
+// ---------------------------------------------------------------------------
+
+function selected(value) {
+    return value ? 'selected' : '';
+}
+
+async function addSettingsPanel() {
+    const settings = getSettings();
+    const html = await renderExtensionTemplateAsync(`third-party/${MODULE_NAME}`, 'settings', {
+        modeAuto: selected(settings.mode === 'auto'),
+        modeSpec: selected(settings.mode === 'spec'),
+        modeReact: selected(settings.mode === 'react'),
+        modeWeak: selected(settings.mode === 'weak'),
+        modeStandard: selected(settings.mode === 'standard'),
+        modeOff: selected(settings.mode === 'off'),
+        positionFirst: selected(settings.injectPosition === 'first'),
+        positionAfterSystem: selected(settings.injectPosition === 'after-system'),
+        anchorsChecked: settings.anchorsEnabled ? 'checked' : '',
+        guidanceChecked: settings.guidanceEnabled ? 'checked' : '',
+        allModelsChecked: settings.applyToAllModels ? 'checked' : '',
+        personaSpec: settings.personaOverrides.spec,
+        personaReact: settings.personaOverrides.react,
+        personaWeak: settings.personaOverrides.weak,
+    });
+    $('#extensions_settings2').append(html);
+
+    $('#dsh_router_mode').on('change', function () {
+        getSettings().mode = String($(this).val());
+        saveSettingsDebounced();
+        updateStatus();
+    });
+    $('#dsh_router_position').on('change', function () {
+        getSettings().injectPosition = String($(this).val());
+        saveSettingsDebounced();
+    });
+    $('#dsh_router_anchors').on('change', function () {
+        getSettings().anchorsEnabled = $(this).prop('checked');
+        saveSettingsDebounced();
+    });
+    $('#dsh_router_guidance').on('change', function () {
+        getSettings().guidanceEnabled = $(this).prop('checked');
+        saveSettingsDebounced();
+    });
+    $('#dsh_router_all_models').on('change', function () {
+        getSettings().applyToAllModels = $(this).prop('checked');
+        saveSettingsDebounced();
+        updateStatus();
+    });
+    for (const band of ['spec', 'react', 'weak']) {
+        $(`#dsh_router_persona_${band}`).on('input', function () {
+            getSettings().personaOverrides[band] = String($(this).val());
+            saveSettingsDebounced();
+            updateStatus();
+        });
+    }
+    $('#dsh_router_reclassify').on('click', () => {
+        setRoutingState(null);
+        updateStatus();
+        toastr.info('Router state cleared; the chat will be re-classified on the next generation.', 'DeepSeek Router');
+    });
+    $('#dsh_router_reset').on('click', () => {
+        extension_settings[MODULE_NAME] = structuredClone(DEFAULT_SETTINGS);
+        saveSettingsDebounced();
+        location.reload();
+    });
+}
+
+/** Refresh the panel's status line from the current chat and model. */
+function updateStatus() {
+    const $family = $('#dsh_router_status_family');
+    const $task = $('#dsh_router_status_task');
+    const $persona = $('#dsh_router_status_persona');
+    if (!$family.length) {
+        return;
+    }
+    const settings = getSettings();
+    const modelId = currentModelId();
+    const family = modelFamily(modelId);
+    const routable = settings.mode !== 'off' && getContext().mainAPI === 'openai' && isRoutableModel(modelId, family);
+
+    $family.text(family);
+
+    let taskKind = null;
+    let source = '';
+    if (settings.mode === 'spec' || settings.mode === 'react' || settings.mode === 'weak') {
+        taskKind = settings.mode;
+        source = 'manual';
+    } else if (settings.mode === 'auto') {
+        const locked = getRoutingState();
+        taskKind = locked?.taskKind ?? null;
+        source = locked ? 'auto (locked)' : 'auto (pending)';
+    }
+    $task.text(routable ? `${settings.mode} / ${taskKind ?? '—'} ${source}`.trim() : t`inactive`);
+
+    let persona = '—';
+    if (routable && taskKind) {
+        persona = settings.mode === 'standard' ? corePersona : resolvePersona(family, taskKind);
+    }
+    $persona.text(persona);
+}
+
+jQuery(async () => {
+    loadSettings();
+    await addSettingsPanel();
+    eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, onPromptReady);
+    eventSource.on(event_types.CHAT_CHANGED, updateStatus);
+    updateStatus();
+});

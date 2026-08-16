@@ -1,0 +1,58 @@
+<div class="dsh-router-settings">
+    <div class="inline-drawer">
+        <div class="inline-drawer-toggle inline-drawer-header">
+            <b data-i18n="dshRouter:title">DeepSeek Router (DSH Standard)</b>
+            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+        </div>
+        <div class="inline-drawer-content">
+            <div class="dsh-router-status">
+                <span class="dsh-router-status-label" data-i18n="dshRouter:statusModel">Model family</span>
+                <span id="dsh_router_status_family">—</span>
+                <span class="dsh-router-status-label" data-i18n="dshRouter:statusRoute">Routing</span>
+                <span id="dsh_router_status_task">—</span>
+                <span class="dsh-router-status-label" data-i18n="dshRouter:statusPersona">Persona</span>
+                <span id="dsh_router_status_persona">—</span>
+            </div>
+            <label class="dsh-router-label" for="dsh_router_mode" data-i18n="dshRouter:mode">Routing mode</label>
+            <select id="dsh_router_mode" class="text_pole">
+                <option value="auto" {{modeAuto}} data-i18n="dshRouter:modeAuto">Auto (classify first user message)</option>
+                <option value="spec" {{modeSpec}} data-i18n="dshRouter:modeSpec">spec — deep reasoning</option>
+                <option value="react" {{modeReact}} data-i18n="dshRouter:modeReact">react — fast loops</option>
+                <option value="weak" {{modeWeak}} data-i18n="dshRouter:modeWeak">weak — light tasks</option>
+                <option value="standard" {{modeStandard}} data-i18n="dshRouter:modeStandard">standard — RL interface restoration</option>
+                <option value="off" {{modeOff}} data-i18n="dshRouter:modeOff">Off</option>
+            </select>
+            <label class="dsh-router-label" for="dsh_router_position" data-i18n="dshRouter:position">Persona injection position</label>
+            <select id="dsh_router_position" class="text_pole">
+                <option value="first" {{positionFirst}} data-i18n="dshRouter:positionFirst">Very first system message</option>
+                <option value="after-system" {{positionAfterSystem}} data-i18n="dshRouter:positionAfterSystem">After the system prompt block</option>
+            </select>
+            <label class="checkbox_label">
+                <input id="dsh_router_anchors" type="checkbox" {{anchorsChecked}}>
+                <span data-i18n="dshRouter:anchors">Anti-rumination anchors (Pro/Flash, 8/20/36 back)</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="dsh_router_guidance" type="checkbox" {{guidanceChecked}}>
+                <span data-i18n="dshRouter:guidance">Depth-adaptive convergence guidance</span>
+            </label>
+            <label class="checkbox_label">
+                <input id="dsh_router_all_models" type="checkbox" {{allModelsChecked}}>
+                <span data-i18n="dshRouter:allModels">Apply to non-DeepSeek models too</span>
+            </label>
+            <details class="dsh-router-personas">
+                <summary data-i18n="dshRouter:personaOverrides">Persona overrides (empty = upstream built-in)</summary>
+                <label class="dsh-router-label" for="dsh_router_persona_spec">spec</label>
+                <input id="dsh_router_persona_spec" class="text_pole textarea_compact" type="text" value="{{personaSpec}}">
+                <label class="dsh-router-label" for="dsh_router_persona_react">react</label>
+                <input id="dsh_router_persona_react" class="text_pole textarea_compact" type="text" value="{{personaReact}}">
+                <label class="dsh-router-label" for="dsh_router_persona_weak">weak</label>
+                <input id="dsh_router_persona_weak" class="text_pole textarea_compact" type="text" value="{{personaWeak}}">
+            </details>
+            <div class="dsh-router-buttons">
+                <div id="dsh_router_reclassify" class="menu_button" data-i18n="dshRouter:reclassify">Re-classify this chat</div>
+                <div id="dsh_router_reset" class="menu_button" data-i18n="dshRouter:reset">Reset settings</div>
+            </div>
+            <div class="dsh-router-note" data-i18n="dshRouter:note">standard mode replaces every system message with the RL sentence — character cards will not reach the model. Only active for Chat Completion APIs. Prompt-plane only; stored messages are never modified.</div>
+        </div>
+    </div>
+</div>

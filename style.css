@@ -1,0 +1,57 @@
+.dsh-router-settings .inline-drawer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+}
+
+.dsh-router-status {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 8px;
+    font-size: 0.85em;
+    opacity: 0.9;
+    margin-bottom: 4px;
+}
+
+.dsh-router-status-label {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+#dsh_router_status_family,
+#dsh_router_status_task,
+#dsh_router_status_persona {
+    overflow-wrap: anywhere;
+}
+
+.dsh-router-label {
+    margin: 0;
+}
+
+.dsh-router-personas summary {
+    cursor: pointer;
+    opacity: 0.85;
+}
+
+.dsh-router-personas {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dsh-router-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.dsh-router-buttons .menu_button {
+    flex: 1;
+    margin: 0;
+    text-align: center;
+}
+
+.dsh-router-note {
+    font-size: 0.8em;
+    opacity: 0.75;
+}

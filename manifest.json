@@ -1,0 +1,12 @@
+{
+    "display_name": "DeepSeek Router (DSH Standard)",
+    "loading_order": 1000,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "yjh051108 (upstream), ST port by nevermindblackarts-sketch",
+    "version": "0.1.0",
+    "homePage": "https://github.com/nevermindblackarts-sketch/st-deepseek-router",
+    "auto_update": true
+}
