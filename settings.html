@@ -43,8 +43,14 @@
                 <input id="dsh_router_all_models" type="checkbox" {{allModelsChecked}}>
                 <span data-i18n="对非 DeepSeek 模型也生效">对非 DeepSeek 模型也生效</span>
             </label>
+            <label class="checkbox_label">
+                <input id="dsh_router_cot" type="checkbox" {{cotChecked}}>
+                <span data-i18n="思维链格式约束（仅思考型模型）">思维链格式约束（仅思考型模型）</span>
+            </label>
             <details class="dsh-router-personas">
-                <summary data-i18n="Persona 覆写（留空 = 上游内置）">Persona 覆写（留空 = 上游内置）</summary>
+                <summary data-i18n="Persona 覆写与约束文本（留空 = 内置）">Persona 覆写与约束文本（留空 = 内置）</summary>
+                <label class="dsh-router-label" for="dsh_router_cot_text" data-i18n="思维链约束文本">思维链约束文本</label>
+                <textarea id="dsh_router_cot_text" class="text_pole textarea_compact" rows="6" data-i18n="[placeholder]留空使用内置约束文本" placeholder="留空使用内置约束文本">{{cotText}}</textarea>
                 <label class="dsh-router-label" for="dsh_router_persona_spec">spec</label>
                 <input id="dsh_router_persona_spec" class="text_pole textarea_compact" type="text" value="{{personaSpec}}">
                 <label class="dsh-router-label" for="dsh_router_persona_react">react</label>

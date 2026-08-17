@@ -26,6 +26,27 @@
 export const corePersona = 'You are a helpful software engineer assistant.';
 
 /**
+ * Default thinking-format constraint appended to the last user message for
+ * reasoning models (ST port addition, formulated from community beta feedback):
+ * constrain the first tokens of the thinking block to assertive openers, ban
+ * the rumination register ("Let me/Let's"), and forbid repeating the thinking
+ * block. Operational constraints live in the user plane so the system plane
+ * stays a pure one-sentence persona anchor.
+ */
+export const DEFAULT_COT_CONSTRAINT = `Your thought output must be strictly formatted word for word from one of the following options:
+- \`<｜begin▁of▁thinking｜>I'm \`
+- \`<｜begin▁of▁thinking｜>I've \`
+- \`<｜begin▁of▁thinking｜>I'll \`
+- \`<｜begin▁of▁thinking｜>The \`
+- \`<｜begin▁of▁thinking｜>The user \`
+- \`<｜begin▁of▁thinking｜>Looking \`
+only output the thinking once, and must not repeat the output of \`<｜begin▁of▁thinking｜>\`
+
+Between \`<｜begin▁of▁thinking｜>\` and \`<｜end▁of▁thinking｜>\`, you should strictly prohibit the output of the following phrases:
+- \`Let me \`
+- \`Let's \``;
+
+/**
  * Persona catalog keyed by [family][taskKind] -> system-prompt persona sentence.
  *
  * Pro family is persona-triggered strongly (hard attractor): one sentence is

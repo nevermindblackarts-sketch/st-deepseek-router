@@ -102,10 +102,53 @@ test('manual spec on v4-pro injects the architect persona, anchors, and spec gui
     assert.ok(a36.includes('[36]:'));
     assert.ok(anchored.every((m) => m.role === 'user'), 'anchors land on user messages');
 
-    const guide = messages.filter((m) => m.name === 'dsh_router_guide');
-    // 62 messages + persona: last user index 61 of 63 total -> 1 - ratio <= 0.12
-    assert.equal(guide.length, 1);
-    assert.ok(guide[0].content.includes('write down the final decision'));
+    const guideMessages = messages.filter((m) => m.name === 'dsh_router_guide');
+    assert.equal(guideMessages.length, 0, 'guide lives in the user plane now');
+    let guideTarget = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') { guideTarget = messages[i]; break; }
+    }
+    assert.ok(guideTarget.content.includes('[router]: '), 'guide appended to the last user message');
+    assert.ok(guideTarget.content.includes('write down the final decision'));
+});
+
+test('thinking-format constraint applies to reasoning models only, idempotently', () => {
+    Object.assign(settings(), { mode: 'auto', enabled: true, anchorsEnabled: false, guidanceEnabled: false, cotConstraintEnabled: true, cotConstraintText: '' });
+    setContext({
+        chat: [{ is_user: true, mes: 'hello there' }],
+        chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-reasoner' },
+    });
+    const messages = rpPrompt(2);
+    promptReady({ chat: messages, dryRun: false });
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    assert.ok(lastUser.content.includes('[router-cot]:'), 'constraint appended to the last user message');
+    assert.ok(lastUser.content.includes(`<｜begin▁of▁thinking｜>I'm `), 'built-in block used');
+    assert.ok(lastUser.content.trimEnd().endsWith('[/router-cot]'));
+    const once = lastUser.content;
+    promptReady({ chat: messages, dryRun: false });
+    assert.equal(lastUser.content, once, 'idempotent re-application');
+
+    setContext({
+        chat: [{ is_user: true, mes: 'hello there' }],
+        chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' },
+    });
+    const plain = rpPrompt(2);
+    promptReady({ chat: plain, dryRun: false });
+    const plainLastUser = [...plain].reverse().find((m) => m.role === 'user');
+    assert.ok(!plainLastUser.content.includes('[router-cot]'), 'non-thinking model untouched');
+
+    settings().cotConstraintText = 'Custom constraint line.';
+    setContext({
+        chat: [{ is_user: true, mes: 'hello there' }],
+        chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-reasoner' },
+    });
+    const custom = rpPrompt(2);
+    promptReady({ chat: custom, dryRun: false });
+    const customLastUser = [...custom].reverse().find((m) => m.role === 'user');
+    assert.ok(customLastUser.content.includes('Custom constraint line.'));
+    assert.ok(!customLastUser.content.includes(`<｜begin▁of▁thinking｜>I'm `), 'custom text replaces the built-in block');
+    settings().cotConstraintText = '';
+    settings().cotConstraintEnabled = false;
 });
 
 test('non-DeepSeek models and text-completion APIs are left untouched', () => {

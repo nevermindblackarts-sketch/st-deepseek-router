@@ -18,10 +18,13 @@
     "反空转锚点（Pro/Flash，距窗口尾 8/20/36）": "Anti-rumination anchors (Pro/Flash, 8/20/36 back)",
     "深度自适应收敛引导": "Depth-adaptive convergence guidance",
     "对非 DeepSeek 模型也生效": "Apply to non-DeepSeek models too",
-    "Persona 覆写（留空 = 上游内置）": "Persona overrides (empty = upstream built-in)",
     "重新分类本聊天": "Re-classify this chat",
     "恢复默认设置": "Reset settings",
     "standard 模式会把所有 system 消息替换为 RL 训练句，角色卡不会到达模型。仅对 Chat Completion 接口生效。所有改动只作用于发送的提示，不修改已存储的消息。": "standard mode replaces every system message with the RL sentence — character cards will not reach the model. Only active for Chat Completion APIs. Prompt-plane only; stored messages are never modified.",
     "未生效": "inactive",
-    "未生效·接口非 Chat Completion": "inactive · not a Chat Completion API"
+    "未生效·接口非 Chat Completion": "inactive · not a Chat Completion API",
+    "思维链格式约束（仅思考型模型）": "Thinking-format constraint (reasoning models only)",
+    "思维链约束文本": "Thinking-format constraint text",
+    "Persona 覆写与约束文本（留空 = 内置）": "Persona overrides & constraint text (empty = built-in)",
+    "留空使用内置约束文本": "Leave empty to use the built-in constraint"
 }

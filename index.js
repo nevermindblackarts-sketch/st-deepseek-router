@@ -33,6 +33,7 @@ import { eventSource, event_types } from '../../../events.js';
 import { saveSettingsDebounced } from '../../../../script.js';
 import { t } from '../../../i18n.js';
 import {
+    DEFAULT_COT_CONSTRAINT,
     appendUserAnchor,
     buildGuidance,
     classifyTask,
@@ -44,9 +45,12 @@ import {
 
 const MODULE_NAME = 'st-deepseek-router';
 const PERSONA_MSG_NAME = 'dsh_router';
-const GUIDE_MSG_NAME = 'dsh_router_guide';
 const METADATA_KEY = 'dsh_router_state';
 const ANCHOR_OFFSETS = [36, 20, 8];
+
+/** User-plane markers for idempotent re-application on the same array. */
+const GUIDE_MARKER_RE = /^\[router\]: .*$/gm;
+const COT_BLOCK_RE = /^\[router-cot\]:\n[\s\S]*?^\[\/router-cot\]$/gm;
 
 /**
  * Generation type of the Generate() call currently in flight (set on
@@ -78,6 +82,10 @@ const DEFAULT_SETTINGS = {
     guidanceEnabled: true,
     /** Route even when the model id is not DeepSeek-shaped. */
     applyToAllModels: false,
+    /** Append the thinking-format constraint to the last user message for reasoning models. */
+    cotConstraintEnabled: false,
+    /** Custom constraint text; empty = built-in DEFAULT_COT_CONSTRAINT. */
+    cotConstraintText: '',
     /** Per-band persona overrides; empty string = upstream built-in for the family. */
     personaOverrides: { spec: '', react: '', weak: '' },
 };
@@ -190,7 +198,7 @@ function resolvePersona(family, taskKind) {
 
 function stripRouterMessages(messages) {
     for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i]?.name === PERSONA_MSG_NAME || messages[i]?.name === GUIDE_MSG_NAME) {
+        if (messages[i]?.name === PERSONA_MSG_NAME) {
             messages.splice(i, 1);
         }
     }
@@ -226,11 +234,46 @@ function applyAnchors(messages, family) {
     }
 }
 
+/**
+ * Append the convergence guide to the last user message. Operational
+ * constraints live in the user plane so the system plane stays a pure
+ * persona anchor.
+ * @param {Array<object>} messages Final prompt array, mutated in place.
+ * @param {'spec' | 'react' | 'weak'} taskKind
+ */
 function applyGuidance(messages, taskKind) {
     const guide = buildGuidance(messages, taskKind, lastUserIndex(messages), messages.length);
-    if (guide) {
-        messages.push({ role: 'system', name: GUIDE_MSG_NAME, content: guide });
+    if (!guide) {
+        return;
     }
+    const idx = lastUserIndex(messages);
+    const msg = messages[idx];
+    if (idx < 0 || typeof msg?.content !== 'string') {
+        return;
+    }
+    msg.content = msg.content.replace(GUIDE_MARKER_RE, '').trimEnd();
+    msg.content += `\n\n[router]: ${guide}`;
+}
+
+/** Reasoning-model detection: only thinking models emit the constrained block. */
+function isThinkingModel(modelId, family) {
+    return family === 'DeepSeekPro' || family === 'DeepSeekFlash' || /reasoner|thinking|deepseek-r1/i.test(modelId);
+}
+
+/**
+ * Append the thinking-format constraint to the last user message, fenced in
+ * marker lines so re-application strips the previous block first.
+ * @param {Array<object>} messages Final prompt array, mutated in place.
+ * @param {string} text Constraint block.
+ */
+function applyCotConstraint(messages, text) {
+    const idx = lastUserIndex(messages);
+    const msg = messages[idx];
+    if (idx < 0 || typeof msg?.content !== 'string') {
+        return;
+    }
+    msg.content = msg.content.replace(COT_BLOCK_RE, '').trimEnd();
+    msg.content += `\n\n[router-cot]:\n${text.trim()}\n[/router-cot]`;
 }
 
 /**
@@ -289,6 +332,9 @@ function onPromptReady(eventData) {
     if (settings.guidanceEnabled) {
         applyGuidance(messages, taskKind);
     }
+    if (settings.cotConstraintEnabled && isThinkingModel(modelId, family)) {
+        applyCotConstraint(messages, settings.cotConstraintText?.trim() || DEFAULT_COT_CONSTRAINT);
+    }
     updateStatus();
 }
 
@@ -314,6 +360,8 @@ async function addSettingsPanel() {
         anchorsChecked: settings.anchorsEnabled ? 'checked' : '',
         guidanceChecked: settings.guidanceEnabled ? 'checked' : '',
         allModelsChecked: settings.applyToAllModels ? 'checked' : '',
+        cotChecked: settings.cotConstraintEnabled ? 'checked' : '',
+        cotText: settings.cotConstraintText,
         personaSpec: settings.personaOverrides.spec,
         personaReact: settings.personaOverrides.react,
         personaWeak: settings.personaOverrides.weak,
@@ -346,6 +394,14 @@ async function addSettingsPanel() {
         getSettings().applyToAllModels = $(this).prop('checked');
         saveSettingsDebounced();
         updateStatus();
+    });
+    $('#dsh_router_cot').on('change', function () {
+        getSettings().cotConstraintEnabled = $(this).prop('checked');
+        saveSettingsDebounced();
+    });
+    $('#dsh_router_cot_text').on('input', function () {
+        getSettings().cotConstraintText = String($(this).val());
+        saveSettingsDebounced();
     });
     for (const band of ['spec', 'react', 'weak']) {
         $(`#dsh_router_persona_${band}`).on('input', function () {
