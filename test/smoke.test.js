@@ -24,10 +24,10 @@ beginTurn();
 
 function setContext(overrides = {}) {
     globalThis.__stContext = {
-        mainAPI: 'openai',
+        mainApi: 'openai',
         chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' },
         chat: [],
-        metadata: {},
+        chatMetadata: {},
         ...overrides,
     };
 }
@@ -61,7 +61,7 @@ test('auto mode classifies the first stored user message and injects the core pe
     assert.equal(messages.filter((m) => m.name === 'dsh_router').length, 1);
     assert.equal(messages.some((m) => typeof m.content === 'string' && m.content.includes('[8]:')), false);
     // classification locked into chat metadata
-    assert.equal(globalThis.__stContext.metadata.dsh_router_state.taskKind, 'react');
+    assert.equal(globalThis.__stContext.chatMetadata.dsh_router_state.taskKind, 'react');
 });
 
 test('listener is idempotent when SillyTavern replays the same array (dry run then send)', () => {
@@ -117,7 +117,7 @@ test('non-DeepSeek models and text-completion APIs are left untouched', () => {
 
     setContext({ chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' }, chat: [{ is_user: true, mes: 'hello there' }] });
     const textApi = rpPrompt(2);
-    globalThis.__stContext.mainAPI = 'text';
+    globalThis.__stContext.mainApi = 'text';
     promptReady({ chat: textApi, dryRun: false });
     assert.equal(textApi.some((m) => m.name === 'dsh_router'), false);
 });
@@ -201,7 +201,7 @@ test('master switch gates every injection; empty chats change nothing', () => {
     promptReady({ chat: enabled, dryRun: false });
     assert.equal(enabled.some((m) => m.name === 'dsh_router'), true);
 
-    setContext({ chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' }, chat: [], metadata: {} });
+    setContext({ chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' }, chat: [], chatMetadata: {} });
     const noUser = rpPrompt(2);
     promptReady({ chat: noUser, dryRun: false });
     assert.equal(noUser.some((m) => m.name === 'dsh_router'), false);

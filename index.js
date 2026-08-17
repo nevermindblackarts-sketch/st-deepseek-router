@@ -106,16 +106,16 @@ function loadSettings() {
 
 function getRoutingState() {
     const context = getContext();
-    return context.metadata?.[METADATA_KEY] ?? null;
+    return context.chatMetadata?.[METADATA_KEY] ?? null;
 }
 
 function setRoutingState(state) {
     const context = getContext();
-    context.metadata = context.metadata || {};
+    context.chatMetadata = context.chatMetadata || {};
     if (state) {
-        context.metadata[METADATA_KEY] = state;
+        context.chatMetadata[METADATA_KEY] = state;
     } else {
-        delete context.metadata[METADATA_KEY];
+        delete context.chatMetadata[METADATA_KEY];
     }
     saveMetadataDebounced();
 }
@@ -254,7 +254,7 @@ function onPromptReady(eventData) {
         console.debug('[st-deepseek-router] skipped: not a user-visible chat turn (quiet/raw request)');
         return;
     }
-    if (getContext().mainAPI !== 'openai') {
+    if (getContext().mainApi !== 'openai') {
         console.debug('[st-deepseek-router] skipped: not a Chat Completion API');
         updateStatus();
         return;
@@ -377,7 +377,7 @@ function updateStatus() {
     const settings = getSettings();
     const modelId = currentModelId();
     const family = modelFamily(modelId);
-    const routable = settings.enabled && getContext().mainAPI === 'openai' && isRoutableModel(modelId, family);
+    const routable = settings.enabled && getContext().mainApi === 'openai' && isRoutableModel(modelId, family);
 
     const $badge = $('#dsh_router_header_state');
     $badge.text(settings.enabled ? t`启用中` : t`已停用`);
@@ -401,7 +401,7 @@ function updateStatus() {
     }
     const routeText = !settings.enabled
         ? t`已停用`
-        : getContext().mainAPI !== 'openai'
+        : getContext().mainApi !== 'openai'
             ? t`未生效·接口非 Chat Completion`
             : routable
                 ? `${MODE_LABELS[settings.mode]}｜${taskLabel}｜${sourceLabel}`
