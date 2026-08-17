@@ -1,5 +1,8 @@
 {
     "DeepSeek 路由器（DSH Standard 移植）": "DeepSeek Router (DSH Standard)",
+    "启用插件（总开关）": "Enable plugin (master switch)",
+    "启用中": "on",
+    "已停用": "off",
     "模型族": "Model family",
     "路由": "Routing",
     "Persona": "Persona",
@@ -9,7 +12,6 @@
     "react — 快循环": "react — fast loops",
     "weak — 轻任务": "weak — light tasks",
     "standard — RL 接口还原": "standard — RL interface restoration",
-    "关闭": "Off",
     "Persona 注入位置": "Persona injection position",
     "最前的 system 消息": "Very first system message",
     "系统提示块之后": "After the system prompt block",

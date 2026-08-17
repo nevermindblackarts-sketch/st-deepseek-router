@@ -52,12 +52,13 @@ const MODE_LABELS = {
     react: '快循环（react）',
     weak: '轻任务（weak）',
     standard: 'RL 接口还原',
-    off: '关闭',
 };
 const TASK_LABELS = { spec: '深度', react: '快循环', weak: '轻任务' };
 
 const DEFAULT_SETTINGS = {
-    /** auto | spec | react | weak | standard | off */
+    /** Master switch: gates every router effect. */
+    enabled: true,
+    /** auto | spec | react | weak | standard */
     mode: 'auto',
     /** Persona system-message position: first message, or after the leading system block. */
     injectPosition: 'first',
@@ -76,6 +77,11 @@ function getSettings() {
 function loadSettings() {
     extension_settings[MODULE_NAME] = extension_settings[MODULE_NAME] || {};
     const settings = extension_settings[MODULE_NAME];
+    // Pre-0.1.2: "off" lived in the mode dropdown; migrate it to the master switch.
+    if (settings.mode === 'off') {
+        settings.mode = 'auto';
+        settings.enabled = false;
+    }
     for (const key of Object.keys(DEFAULT_SETTINGS)) {
         if (settings[key] === undefined) settings[key] = structuredClone(DEFAULT_SETTINGS[key]);
     }
@@ -219,7 +225,7 @@ function onPromptReady(eventData) {
         return;
     }
     const settings = getSettings();
-    if (settings.mode === 'off') {
+    if (!settings.enabled) {
         updateStatus();
         return;
     }
@@ -270,12 +276,12 @@ function selected(value) {
 async function addSettingsPanel() {
     const settings = getSettings();
     const html = await renderExtensionTemplateAsync(`third-party/${MODULE_NAME}`, 'settings', {
+        enabledChecked: settings.enabled ? 'checked' : '',
         modeAuto: selected(settings.mode === 'auto'),
         modeSpec: selected(settings.mode === 'spec'),
         modeReact: selected(settings.mode === 'react'),
         modeWeak: selected(settings.mode === 'weak'),
         modeStandard: selected(settings.mode === 'standard'),
-        modeOff: selected(settings.mode === 'off'),
         positionFirst: selected(settings.injectPosition === 'first'),
         positionAfterSystem: selected(settings.injectPosition === 'after-system'),
         anchorsChecked: settings.anchorsEnabled ? 'checked' : '',
@@ -287,6 +293,11 @@ async function addSettingsPanel() {
     });
     $('#extensions_settings2').append(html);
 
+    $('#dsh_router_enabled').on('change', function () {
+        getSettings().enabled = $(this).prop('checked');
+        saveSettingsDebounced();
+        updateStatus();
+    });
     $('#dsh_router_mode').on('change', function () {
         getSettings().mode = String($(this).val());
         saveSettingsDebounced();
@@ -339,7 +350,12 @@ function updateStatus() {
     const settings = getSettings();
     const modelId = currentModelId();
     const family = modelFamily(modelId);
-    const routable = settings.mode !== 'off' && getContext().mainAPI === 'openai' && isRoutableModel(modelId, family);
+    const routable = settings.enabled && getContext().mainAPI === 'openai' && isRoutableModel(modelId, family);
+
+    const $badge = $('#dsh_router_header_state');
+    $badge.text(settings.enabled ? t`启用中` : t`已停用`);
+    $badge.toggleClass('on', settings.enabled);
+    $badge.toggleClass('off', !settings.enabled);
 
     $family.text(family);
 
@@ -356,9 +372,11 @@ function updateStatus() {
         taskLabel = locked ? TASK_LABELS[locked.taskKind] ?? '—' : '—';
         sourceLabel = locked ? '自动 · 已锁定' : '自动 · 待分类';
     }
-    const routeText = routable
-        ? `${MODE_LABELS[settings.mode]}｜${taskLabel}｜${sourceLabel}`
-        : t`未生效`;
+    const routeText = !settings.enabled
+        ? t`已停用`
+        : routable
+            ? `${MODE_LABELS[settings.mode]}｜${taskLabel}｜${sourceLabel}`
+            : t`未生效`;
     $task.text(routeText);
 
     let persona = '—';

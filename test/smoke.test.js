@@ -137,14 +137,18 @@ test('persona override wins over the family default', () => {
     settings().personaOverrides.react = '';
 });
 
-test('off mode and empty chats change nothing', () => {
-    Object.assign(settings(), { mode: 'off' });
-    setContext({ onlineStatus: 'deepseek-chat' });
-    const off = rpPrompt(2);
-    promptReady({ chat: off, dryRun: false });
-    assert.equal(off.some((m) => m.name === 'dsh_router'), false);
+test('master switch gates every injection; empty chats change nothing', () => {
+    Object.assign(settings(), { mode: 'auto', enabled: false });
+    setContext({ onlineStatus: 'deepseek-chat', chat: [{ is_user: true, mes: 'hello there' }] });
+    const disabled = rpPrompt(2);
+    promptReady({ chat: disabled, dryRun: false });
+    assert.equal(disabled.some((m) => m.name === 'dsh_router'), false);
 
-    Object.assign(settings(), { mode: 'auto' });
+    settings().enabled = true;
+    const enabled = rpPrompt(2);
+    promptReady({ chat: enabled, dryRun: false });
+    assert.equal(enabled.some((m) => m.name === 'dsh_router'), true);
+
     setContext({ onlineStatus: 'deepseek-chat', chat: [], metadata: {} });
     const noUser = rpPrompt(2);
     promptReady({ chat: noUser, dryRun: false });

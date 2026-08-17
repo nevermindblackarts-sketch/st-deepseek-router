@@ -2,9 +2,14 @@
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header">
             <b data-i18n="DeepSeek 路由器（DSH Standard 移植）">DeepSeek 路由器（DSH Standard 移植）</b>
+            <span id="dsh_router_header_state" class="dsh-router-badge"></span>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
+            <label class="checkbox_label dsh-router-master">
+                <input id="dsh_router_enabled" type="checkbox" {{enabledChecked}}>
+                <span data-i18n="启用插件（总开关）">启用插件（总开关）</span>
+            </label>
             <div class="dsh-router-status">
                 <span class="dsh-router-status-label" data-i18n="模型族">模型族</span>
                 <span id="dsh_router_status_family">—</span>
@@ -20,7 +25,6 @@
                 <option value="react" {{modeReact}} data-i18n="react — 快循环">react — 快循环</option>
                 <option value="weak" {{modeWeak}} data-i18n="weak — 轻任务">weak — 轻任务</option>
                 <option value="standard" {{modeStandard}} data-i18n="standard — RL 接口还原">standard — RL 接口还原</option>
-                <option value="off" {{modeOff}} data-i18n="关闭">关闭</option>
             </select>
             <label class="dsh-router-label" for="dsh_router_position" data-i18n="Persona 注入位置">Persona 注入位置</label>
             <select id="dsh_router_position" class="text_pole">

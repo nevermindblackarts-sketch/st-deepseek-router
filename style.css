@@ -5,6 +5,31 @@
     padding: 8px;
 }
 
+.dsh-router-master {
+    font-weight: 600;
+    padding: 6px 8px;
+    border: 1px solid var(--SmartThemeBorderColor, #7a7a7a);
+    border-radius: 5px;
+}
+
+.dsh-router-badge {
+    font-size: 0.72em;
+    font-weight: 600;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 9px;
+    border: 1px solid currentColor;
+    vertical-align: middle;
+}
+
+.dsh-router-badge.on {
+    color: #7fce7f;
+}
+
+.dsh-router-badge.off {
+    color: #e06c6c;
+}
+
 .dsh-router-status {
     display: grid;
     grid-template-columns: auto 1fr;

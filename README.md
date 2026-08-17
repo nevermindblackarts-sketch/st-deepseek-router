@@ -33,7 +33,7 @@ git clone https://github.com/nevermindblackarts-sketch/st-deepseek-router
 
 ## 使用
 
-默认模式 `auto`：每个聊天首次生成时，取首条用户消息分类出 spec / react / weak，锁定档位并注入对应 persona 句。面板可切换模式（auto / spec / react / weak / standard / off）、注入位置、锚点与收敛引导开关、persona 覆写，并实时显示路由状态。
+面板第一项是**总开关**（标题旁常显 启用中/已停用 徽标），关闭即停止一切注入。默认模式 `auto`：每个聊天首次生成时，取首条用户消息分类出 spec / react / weak，锁定档位并注入对应 persona 句。面板可切换模式（auto / spec / react / weak / standard）、注入位置、锚点与收敛引导开关、persona 覆写，并实时显示路由状态。
 
 ⚠️ **standard 模式会把所有 system 消息替换为 RL 训练句，角色卡不会到达模型**——只适合纯助手/工具型用法，RP 聊天勿开。
 
