@@ -17,6 +17,10 @@ await new Promise((resolve) => setImmediate(resolve));
 const { __listeners } = await import('virtual-stub:events.js');
 const promptReady = __listeners['chat_completion_prompt_ready'];
 assert.equal(typeof promptReady, 'function', 'listener registered on init');
+// A user-visible turn must be in flight for routing to apply.
+const beginTurn = (type = 'normal') => __listeners['generation_started'](type);
+const endTurn = () => __listeners['generation_stopped']();
+beginTurn();
 
 function setContext(overrides = {}) {
     globalThis.__stContext = {
@@ -162,6 +166,27 @@ test('model id resolves from the active chat-completion source (deepseek / openr
     const aliasModel = rpPrompt(2);
     promptReady({ chat: aliasModel, dryRun: false });
     assert.equal(aliasModel.some((m) => m.name === 'dsh_router'), false, 'alias without deepseek stays unrouted unless forced');
+});
+
+test('quiet generations and generateRaw calls are left untouched', () => {
+    Object.assign(settings(), { mode: 'auto', enabled: true, applyToAllModels: false });
+    setContext({ chat: [{ is_user: true, mes: 'hello there' }] });
+
+    beginTurn('quiet');
+    const quiet = rpPrompt(2);
+    promptReady({ chat: quiet, dryRun: false });
+    assert.equal(quiet.some((m) => m.name === 'dsh_router'), false, 'quiet background generation unrouted');
+
+    endTurn();
+    const raw = [{ role: 'system', content: 'Summarize the chat so far.' }];
+    promptReady({ chat: raw, dryRun: false });
+    assert.equal(raw.some((m) => m.name === 'dsh_router'), false, 'generateRaw array (no generation in flight) unrouted');
+    assert.equal(raw.length, 1);
+
+    beginTurn();
+    const visible = rpPrompt(2);
+    promptReady({ chat: visible, dryRun: false });
+    assert.equal(visible.some((m) => m.name === 'dsh_router'), true, 'normal turns still routed');
 });
 
 test('master switch gates every injection; empty chats change nothing', () => {

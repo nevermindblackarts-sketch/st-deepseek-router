@@ -15,6 +15,8 @@ export function saveMetadataDebounced() {}
 export const event_types = {
     CHAT_COMPLETION_PROMPT_READY: 'chat_completion_prompt_ready',
     CHAT_CHANGED: 'chat_id_changed',
+    GENERATION_STARTED: 'generation_started',
+    GENERATION_STOPPED: 'generation_stopped',
 };
 export const __listeners = {};
 export const eventSource = {

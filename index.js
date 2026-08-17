@@ -16,7 +16,10 @@
  *  4. depth-adaptive guidance: fast-convergence (react/weak bands) or
  *     decision-closure (spec band) as the context window drains.
  *
- * Only applies to Chat Completion API sources. Non-DeepSeek models are left
+ * Only applies to user-visible Chat Completion chat turns: quiet background
+ * generations (titles, summaries, translations) and generateRaw extension
+ * calls are detected via the generation lifecycle and left untouched.
+ * Non-DeepSeek models are left
  * untouched unless "apply to all models" is enabled; unknown DeepSeek ids
  * (deepseek-chat / deepseek-reasoner / v3.x) route with the core persona.
  */
@@ -44,6 +47,15 @@ const PERSONA_MSG_NAME = 'dsh_router';
 const GUIDE_MSG_NAME = 'dsh_router_guide';
 const METADATA_KEY = 'dsh_router_state';
 const ANCHOR_OFFSETS = [36, 20, 8];
+
+/**
+ * Generation type of the Generate() call currently in flight (set on
+ * GENERATION_STARTED, cleared on GENERATION_STOPPED). CHAT_COMPLETION_PROMPT_READY
+ * also fires for quiet generations (title/summary/translation background
+ * requests) and for generateRaw extension calls, which carry no GENERATION_STARTED;
+ * both must stay unrouted. Null means no user-visible chat turn is generating.
+ */
+let activeGenerationType = null;
 
 /** Chinese-first UI labels; en locale overrides come from locales/en.json. */
 const MODE_LABELS = {
@@ -238,6 +250,10 @@ function onPromptReady(eventData) {
         updateStatus();
         return;
     }
+    if (activeGenerationType === null || activeGenerationType === 'quiet') {
+        console.debug('[st-deepseek-router] skipped: not a user-visible chat turn (quiet/raw request)');
+        return;
+    }
     if (getContext().mainAPI !== 'openai') {
         console.debug('[st-deepseek-router] skipped: not a Chat Completion API');
         updateStatus();
@@ -402,6 +418,8 @@ function updateStatus() {
 jQuery(async () => {
     loadSettings();
     await addSettingsPanel();
+    eventSource.on(event_types.GENERATION_STARTED, (type) => { activeGenerationType = type; });
+    eventSource.on(event_types.GENERATION_STOPPED, () => { activeGenerationType = null; });
     eventSource.on(event_types.CHAT_COMPLETION_PROMPT_READY, onPromptReady);
     eventSource.on(event_types.CHAT_CHANGED, updateStatus);
     updateStatus();
