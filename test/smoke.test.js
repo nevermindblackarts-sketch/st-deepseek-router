@@ -232,6 +232,35 @@ test('quiet generations and generateRaw calls are left untouched', () => {
     assert.equal(visible.some((m) => m.name === 'dsh_router'), true, 'normal turns still routed');
 });
 
+test('output-format guard restores world-info format duties in the user plane', () => {
+    Object.assign(settings(), { mode: 'auto', enabled: true, anchorsEnabled: false, guidanceEnabled: false, formatGuardEnabled: true, formatGuardText: '' });
+    setContext({
+        chat: [{ is_user: true, mes: 'hello there' }],
+        chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' },
+    });
+    const messages = rpPrompt(2);
+    promptReady({ chat: messages, dryRun: false });
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    assert.ok(lastUser.content.includes('[router-format]: '), 'guard line appended to the last user message');
+    assert.ok(lastUser.content.includes('image-generation tags'), 'built-in guard used');
+    const once = lastUser.content;
+    promptReady({ chat: messages, dryRun: false });
+    assert.equal(lastUser.content, once, 'idempotent re-application');
+
+    settings().formatGuardText = 'Always append the tag block.';
+    const custom = rpPrompt(2);
+    promptReady({ chat: custom, dryRun: false });
+    const customLastUser = [...custom].reverse().find((m) => m.role === 'user');
+    assert.ok(customLastUser.content.includes('[router-format]: Always append the tag block.'));
+    settings().formatGuardText = '';
+    settings().formatGuardEnabled = false;
+
+    const off = rpPrompt(2);
+    promptReady({ chat: off, dryRun: false });
+    const offLastUser = [...off].reverse().find((m) => m.role === 'user');
+    assert.ok(!offLastUser.content.includes('[router-format]'), 'off by default');
+});
+
 test('master switch gates every injection; empty chats change nothing', () => {
     Object.assign(settings(), { mode: 'auto', enabled: false });
     setContext({ chatCompletionSettings: { chat_completion_source: 'custom', custom_model: 'deepseek-chat' }, chat: [{ is_user: true, mes: 'hello there' }] });

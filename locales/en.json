@@ -26,5 +26,8 @@
     "思维链格式约束（仅思考型模型）": "Thinking-format constraint (reasoning models only)",
     "思维链约束文本": "Thinking-format constraint text",
     "Persona 覆写与约束文本（留空 = 内置）": "Persona overrides & constraint text (empty = built-in)",
-    "留空使用内置约束文本": "Leave empty to use the built-in constraint"
+    "留空使用内置约束文本": "Leave empty to use the built-in constraint",
+    "输出格式守护（世界书生图/状态栏兼容）": "Output-format guard (world-info image-tag/status-bar compatibility)",
+    "输出格式守护文本": "Output-format guard text",
+    "留空使用内置守护文本": "Leave empty to use the built-in guard line"
 }

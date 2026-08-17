@@ -50,7 +50,15 @@ const ANCHOR_OFFSETS = [36, 20, 8];
 
 /** User-plane markers for idempotent re-application on the same array. */
 const GUIDE_MARKER_RE = /^\[router\]: .*$/gm;
+const FORMAT_GUARD_MARKER_RE = /^\[router-format\]: .*$/gm;
 const COT_BLOCK_RE = /^\[router-cot\]:\n[\s\S]*?^\[\/router-cot\]$/gm;
+
+/**
+ * Built-in output-format guard line: restores the salience of world-info
+ * format duties (image-gen tags, status blocks) that the persona anchor —
+ * a hard attractor — tends to override.
+ */
+const DEFAULT_FORMAT_GUARD = 'Before finishing your reply, re-check and follow every output-format instruction present in this conversation (for example: image-generation tags, status bars, or other world-info formatting duties) exactly.';
 
 /**
  * Generation type of the Generate() call currently in flight (set on
@@ -86,6 +94,10 @@ const DEFAULT_SETTINGS = {
     cotConstraintEnabled: false,
     /** Custom constraint text; empty = built-in DEFAULT_COT_CONSTRAINT. */
     cotConstraintText: '',
+    /** Append the output-format guard line (world-info tag/status compatibility). */
+    formatGuardEnabled: false,
+    /** Custom guard line; empty = built-in DEFAULT_FORMAT_GUARD. */
+    formatGuardText: '',
     /** Per-band persona overrides; empty string = upstream built-in for the family. */
     personaOverrides: { spec: '', react: '', weak: '' },
 };
@@ -277,6 +289,22 @@ function applyCotConstraint(messages, text) {
 }
 
 /**
+ * Append the output-format guard line to the last user message so world-info
+ * format duties (image-gen tags, status blocks) survive the persona anchor.
+ * @param {Array<object>} messages Final prompt array, mutated in place.
+ * @param {string} text Guard line.
+ */
+function applyFormatGuard(messages, text) {
+    const idx = lastUserIndex(messages);
+    const msg = messages[idx];
+    if (idx < 0 || typeof msg?.content !== 'string') {
+        return;
+    }
+    msg.content = msg.content.replace(FORMAT_GUARD_MARKER_RE, '').trimEnd();
+    msg.content += `\n\n[router-format]: ${text.trim()}`;
+}
+
+/**
  * CHAT_COMPLETION_PROMPT_READY handler: rewrites the outgoing message array
  * in place. Fires both for real sends and for dry runs (token counting), so
  * token estimates include the router's injections.
@@ -332,6 +360,9 @@ function onPromptReady(eventData) {
     if (settings.guidanceEnabled) {
         applyGuidance(messages, taskKind);
     }
+    if (settings.formatGuardEnabled) {
+        applyFormatGuard(messages, settings.formatGuardText?.trim() || DEFAULT_FORMAT_GUARD);
+    }
     if (settings.cotConstraintEnabled && isThinkingModel(modelId, family)) {
         applyCotConstraint(messages, settings.cotConstraintText?.trim() || DEFAULT_COT_CONSTRAINT);
     }
@@ -362,6 +393,8 @@ async function addSettingsPanel() {
         allModelsChecked: settings.applyToAllModels ? 'checked' : '',
         cotChecked: settings.cotConstraintEnabled ? 'checked' : '',
         cotText: settings.cotConstraintText,
+        formatGuardChecked: settings.formatGuardEnabled ? 'checked' : '',
+        formatGuardText: settings.formatGuardText,
         personaSpec: settings.personaOverrides.spec,
         personaReact: settings.personaOverrides.react,
         personaWeak: settings.personaOverrides.weak,
@@ -401,6 +434,14 @@ async function addSettingsPanel() {
     });
     $('#dsh_router_cot_text').on('input', function () {
         getSettings().cotConstraintText = String($(this).val());
+        saveSettingsDebounced();
+    });
+    $('#dsh_router_format_guard').on('change', function () {
+        getSettings().formatGuardEnabled = $(this).prop('checked');
+        saveSettingsDebounced();
+    });
+    $('#dsh_router_format_text').on('input', function () {
+        getSettings().formatGuardText = String($(this).val());
         saveSettingsDebounced();
     });
     for (const band of ['spec', 'react', 'weak']) {
