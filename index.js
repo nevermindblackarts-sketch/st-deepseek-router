@@ -154,9 +154,17 @@ function resolveTaskKind(modeSetting) {
 // Prompt-plane rewriting
 // ---------------------------------------------------------------------------
 
+/**
+ * Active chat-completion model id, read from the source-specific settings
+ * field (`custom_model` for Custom OpenAI-compatible, `${source}_model` for
+ * named sources such as deepseek / openrouter / siliconflow). `onlineStatus`
+ * holds a connection message rather than the model for chat completion
+ * sources and must not be used for model detection.
+ * @returns {string}
+ */
 function currentModelId() {
-    const context = getContext();
-    return String(context.onlineStatus || context.chatCompletionSettings?.custom_model_id || '');
+    const oai = getContext().chatCompletionSettings ?? {};
+    return String(oai[`${oai.chat_completion_source}_model`] || oai.custom_model || '');
 }
 
 function isRoutableModel(modelId, family) {
@@ -226,10 +234,12 @@ function onPromptReady(eventData) {
     }
     const settings = getSettings();
     if (!settings.enabled) {
+        console.debug('[st-deepseek-router] skipped: master switch off');
         updateStatus();
         return;
     }
     if (getContext().mainAPI !== 'openai') {
+        console.debug('[st-deepseek-router] skipped: not a Chat Completion API');
         updateStatus();
         return;
     }
@@ -237,6 +247,7 @@ function onPromptReady(eventData) {
     const modelId = currentModelId();
     const family = modelFamily(modelId);
     if (!isRoutableModel(modelId, family)) {
+        console.debug('[st-deepseek-router] skipped: model not routable:', modelId || '(empty)');
         updateStatus();
         return;
     }
@@ -374,9 +385,11 @@ function updateStatus() {
     }
     const routeText = !settings.enabled
         ? t`已停用`
-        : routable
-            ? `${MODE_LABELS[settings.mode]}｜${taskLabel}｜${sourceLabel}`
-            : t`未生效`;
+        : getContext().mainAPI !== 'openai'
+            ? t`未生效·接口非 Chat Completion`
+            : routable
+                ? `${MODE_LABELS[settings.mode]}｜${taskLabel}｜${sourceLabel}`
+                : `${t`未生效`}·${modelId || '—'}`;
     $task.text(routeText);
 
     let persona = '—';
