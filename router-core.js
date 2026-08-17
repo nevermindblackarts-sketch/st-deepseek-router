@@ -44,7 +44,9 @@ only output the thinking once, and must not repeat the output of \`<｜begin▁o
 
 Between \`<｜begin▁of▁thinking｜>\` and \`<｜end▁of▁thinking｜>\`, you should strictly prohibit the output of the following phrases:
 - \`Let me \`
-- \`Let's \``;
+- \`Let's \`
+
+These constraints apply to your thinking block only. In your final reply, follow every output-format instruction present in this conversation exactly.`;
 
 /**
  * Persona catalog keyed by [family][taskKind] -> system-prompt persona sentence.
