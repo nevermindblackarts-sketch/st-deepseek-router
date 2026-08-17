@@ -45,6 +45,17 @@ const GUIDE_MSG_NAME = 'dsh_router_guide';
 const METADATA_KEY = 'dsh_router_state';
 const ANCHOR_OFFSETS = [36, 20, 8];
 
+/** Chinese-first UI labels; en locale overrides come from locales/en.json. */
+const MODE_LABELS = {
+    auto: '自动',
+    spec: '深度（spec）',
+    react: '快循环（react）',
+    weak: '轻任务（weak）',
+    standard: 'RL 接口还原',
+    off: '关闭',
+};
+const TASK_LABELS = { spec: '深度', react: '快循环', weak: '轻任务' };
+
 const DEFAULT_SETTINGS = {
     /** auto | spec | react | weak | standard | off */
     mode: 'auto',
@@ -308,7 +319,7 @@ async function addSettingsPanel() {
     $('#dsh_router_reclassify').on('click', () => {
         setRoutingState(null);
         updateStatus();
-        toastr.info('Router state cleared; the chat will be re-classified on the next generation.', 'DeepSeek Router');
+        toastr.info('路由状态已清除，下次生成时将重新分类本聊天。', 'DeepSeek Router');
     });
     $('#dsh_router_reset').on('click', () => {
         extension_settings[MODULE_NAME] = structuredClone(DEFAULT_SETTINGS);
@@ -333,16 +344,22 @@ function updateStatus() {
     $family.text(family);
 
     let taskKind = null;
-    let source = '';
+    let taskLabel = '—';
+    let sourceLabel = '';
     if (settings.mode === 'spec' || settings.mode === 'react' || settings.mode === 'weak') {
         taskKind = settings.mode;
-        source = 'manual';
+        taskLabel = TASK_LABELS[settings.mode];
+        sourceLabel = '手动';
     } else if (settings.mode === 'auto') {
         const locked = getRoutingState();
         taskKind = locked?.taskKind ?? null;
-        source = locked ? 'auto (locked)' : 'auto (pending)';
+        taskLabel = locked ? TASK_LABELS[locked.taskKind] ?? '—' : '—';
+        sourceLabel = locked ? '自动 · 已锁定' : '自动 · 待分类';
     }
-    $task.text(routable ? `${settings.mode} / ${taskKind ?? '—'} ${source}`.trim() : t`inactive`);
+    const routeText = routable
+        ? `${MODE_LABELS[settings.mode]}｜${taskLabel}｜${sourceLabel}`
+        : t`未生效`;
+    $task.text(routeText);
 
     let persona = '—';
     if (routable && taskKind) {

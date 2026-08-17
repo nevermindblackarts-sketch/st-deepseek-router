@@ -2,6 +2,8 @@
 
 把 [yjh051108/dsh-router-standard](https://github.com/yjh051108/dsh-router-standard)（DeepSeek Harness 的任务感知推理模式路由器）移植为 SillyTavern UI 扩展，在酒馆里对 DeepSeek 系模型实现同效果的提示层优化。
 
+界面默认中文（酒馆语言为 English 时自动切换英文）；详细用法见 **[使用说明](使用说明.md)**。
+
 上游的核心实测结论：DeepSeek 模型沿 react↔spec 轴的行为是**量子化的三个稳定档位**（spec 深度推理 / mixed 摇摆 / react 快循环），档位之间存在相变，而触发主导因素是**一句 persona 系统提示**；档位选择必须由外部决定——模型自己不可信。本扩展把这套路由机制搬到酒馆的最终提示数组上。
 
 ## 机制映射
@@ -31,23 +33,11 @@ git clone https://github.com/nevermindblackarts-sketch/st-deepseek-router
 
 ## 使用
 
-默认模式 `auto`：每个聊天首次生成时，取首条用户消息分类出 spec / react / weak，锁定档位并注入对应 persona 句。RP 开场白通常落在 react 或 weak。
+默认模式 `auto`：每个聊天首次生成时，取首条用户消息分类出 spec / react / weak，锁定档位并注入对应 persona 句。面板可切换模式（auto / spec / react / weak / standard / off）、注入位置、锚点与收敛引导开关、persona 覆写，并实时显示路由状态。
 
-模式说明：
+⚠️ **standard 模式会把所有 system 消息替换为 RL 训练句，角色卡不会到达模型**——只适合纯助手/工具型用法，RP 聊天勿开。
 
-- **auto** — 自动分类并锁定（默认）。
-- **spec / react / weak** — 手动钉死档位，跳过分类。
-- **standard** — RL 接口还原：所有 system 消息被替换为 RL 训练句。**角色卡不会到达模型**，只适合纯助手/工具型用法，RP 聊天勿用。
-- **off** — 完全关闭。
-
-其他开关：锚点（仅 DeepSeek Pro/Flash 族有实测锚点句）、深度自适应引导（全模型族生效；`deepseek-chat` / `deepseek-reasoner` 映射到 DeepSeekOther 族，persona 用核心 RL 句）、persona 覆写（三个档位各可自定义一句话；留空用上游内置——上游的 persona 是在编码负载上测得的，酒馆 RP 负载建议按需改写成对应"档位力度"的句子，机制不变）。
-
-## 注意事项
-
-- 仅对 **Chat Completion** 类 API 生效（Custom OpenAI-compatible / OpenAI 等）；Text Completion 源不经过该钩子。
-- 所有改动只作用于**发送出去的提示**，从不修改已存储的聊天消息；「重新分类本聊天」只清路由状态。
-- 非 DeepSeek 模型默认不路由（kimi/qwen/kiro/minimax 等已知族除外——上游为它们配有弱分类器 persona）；可用「对非 DeepSeek 模型也生效」强制开启。
-- 与「合并系统消息」（squash system messages）设置兼容：合并发生在本扩展注入之前，注入的 system 消息不会被合并。
+各项设置的详细说明、按用途选模式的建议、persona 覆写写法与 FAQ 见 **[使用说明](使用说明.md)**。
 
 ## 与上游的差异
 
